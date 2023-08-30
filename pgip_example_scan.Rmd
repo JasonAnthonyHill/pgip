@@ -1,0 +1,246 @@
+---
+title: "pgip example selection scan"
+author: "Student"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+### Selection scan example using data from Atlantic herring
+
+Welcome to the selection scan example. In this module we will work with pooled data from the Atlantic herring. Using pooled population resequencing we will select two groups of populations to contrast and identify a recent strong selective sweep. This code is provided for instruction and may serve as a template for your own work in the future.
+
+## Load require libraries
+
+Our approach in this example is designed to be as basic and transparent as possible. There are many methods available to scan for haplotype variation between populations but today you will be using a simple and robust method which is good at detecting selective sweeps.
+
+You will require just a few installed libraries to implement the ΔAlleleFrequency-χ2 method:
+* knitr - Allows the implementation of rmarkdown
+* tidyverse - Implements the syntax conventions and plotting tools used in this exercise
+* vcfR - Enables the reading and manipulation of variant call files
+* data.table - Additional data manipulation utilities used herein
+
+Please install these libraries if you do not already have them available and run the code chunk below.
+
+```{r setup}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(vcfR)
+library(data.table)
+```
+
+## Loading of variant calls and initial filtering
+
+# Load vcf
+
+For the sake of space and speed you will limit your analysis to a 7MB chunk of chromosome 4, however this method is easilly extensible to whole genome analysis.
+
+```{r load vcf}
+chr4_vcf <- read.vcfR("chr4_subregion_10pools.vcf")
+```
+
+# Convert vcf to a dataframe
+
+First you want to convert the vcf file to a dataframe for easier manipulation within R. You will also only keep the information that is useful this analysis. VCF files contain a lot of information, but this method is only concerned with allele counts within populations. For example, genotype calls are not relevant since we are working with pooled samples, and will be doing population pooling later.
+
+```{r vcf to df}
+chr4.df <- chr4_vcf %>% 
+  vcfR2tidy(single_frame = TRUE) %>% 
+  .$dat %>% 
+  dplyr::select(POS, Indiv, gt_AD) %>% 
+  drop_na() %>% 
+  mutate(snp_number = row_number()) %>% 
+  separate(gt_AD, c("ref","alt"), sep = ",", convert = T)
+```
+
+#Filtering 
+
+One of the reasons this method is good to apply, especially at the beginning of a project, is that it is robust to irregularities in the variant calling step. As such minimal filtering is required, which as a general rule is a good thing. However it is still usefull to remove sites from the analysis that have extreme high or low coverage, and sites which have missing data from too many populations. 
+
+Look at the median coverage of the data and filter sites that are divergent from this.
+
+```{r depth filter}
+medcov <- chr4.df %>% # Calculate median coverage
+  summarise(med=median(ref+alt)) %>% 
+  .[['med']]
+
+medcov
+
+alleles_rh1_depth_filt <- chr4.df %>% 
+  filter((ref+alt >= 10) & (ref + alt <= 100))
+```
+
+Now count the number of populations we have and remove sites that dont have at least 70% of populations represented.
+
+```{r missing filter}
+numberpops <- alleles_rh1_depth_filt %>%  # Number of pops, improve
+  group_by(POS) %>% 
+  summarise(ns = n()) %>% 
+  ungroup() %>% 
+  arrange(-ns) %>% 
+  slice(1) %>% 
+  .[['ns']]
+
+alleles_rh1_filt <- alleles_rh1_depth_filt %>% # Filter sites with less that 70% samples
+  group_by(POS) %>% 
+  filter(n() > .7*numberpops) %>% 
+  ungroup()
+```
+
+
+## Define Groups
+
+Now your data is ready for testing. We discussed the nature of the data you are working with and which populations we are going to contrast. You will now define the members of the two groups.
+
+```{r define contrast groups}
+group1 <- c("PB1_HastKar_Baltic_Spring", 
+            "PB4_Hudiksvall_Baltic_Spring",
+            "PB6_Galve_Baltic_Summer",
+            "PB5_Galve_Baltic_Spring",
+            "B_Vaxholm_Baltic_Spring")
+group2 <- c("HGS15_NSSH_Atlantic_Spring",
+            "HGS8_KattegatNorth_Atlantic_Spring",
+            "O_Hamburgsund_Atlantic_Spring",
+            "PB10_Skagerrak_Atlantic_Spring",
+            "A_Kalix_Baltic_Spring")
+```
+
+
+## Define functions used for statistical tests
+
+You will define your own functions to pool the group allele counts, calculate the ΔAlleleFrequency, and apply R's inbuilt χ2 function to test for the statistical significance of deviation from expected allele frequences between the populations. If you have questions about the specifics of the functions feel free to ask.
+
+```{r define functions}
+
+groupsum <- function(dfin,group1,group2) {
+  dfin %>%
+    mutate(group = ifelse(grepl(paste(group1,collapse="|"), Indiv), "group1",
+                          ifelse(grepl(paste(group2,collapse="|"), Indiv), "group2", NA))) %>% 
+    group_by(group, POS) %>% 
+    summarise(ref = sum(ref), alt = sum(alt)) %>%  
+    ungroup() %>% 
+    arrange(POS)
+}
+
+chiFunc <- function(x,y) {
+  a1 <- x[1]
+  a2 <- y[1]
+  b1 <- x[2]
+  b2 <- y[2]
+  sumall <- a1+a2+b1+b2
+  expectA1 <- (a1 + a2)*(a1 + b1)/sumall
+  expectA2 <- (a1 + a2)*(a2 + b2)/sumall
+  expectB1 <- (b1 + b2)*(a1 + b1)/sumall
+  expectB2 <- (b1 + b2)*(a2 + b2)/sumall
+  chi <- (a1 - expectA1)^2 / expectA1 + 
+    (a2 - expectA2)^2 / expectA2 + 
+    (b1 - expectB1)^2 / expectB1 + 
+    (b2 - expectB2)^2 / expectB1
+  return(chi)
+}
+
+dafFunc <- function(ref,alt) {
+  ref_A <- ref[1]
+  alt_A <- alt[1]
+  ref_B <- ref[2]
+  alt_B <- alt[2]
+  refAFA <- ref_A/(ref_A+alt_A)
+  altAFA <- alt_A/(ref_A+alt_A)
+  refAFB <- ref_B/(ref_B+alt_B)
+  altAFB <- alt_B/(ref_B+alt_B)
+  refdeltaAF <- abs(refAFA - refAFB)
+  return(refdeltaAF)
+}
+
+chi_daf_test <- function(x) {
+  a <- x %>% 
+    group_by(POS) %>%
+    mutate(refsum = sum(ref), altsum = sum(alt)) %>% 
+    filter(refsum > 0 & altsum > 0) %>% 
+    select(-altsum, -refsum) %>%
+    summarise(chisq = chiFunc(ref,alt)) %>% 
+    mutate(logpval = -log(pchisq(chisq,1,lower.tail=FALSE), base = 10))
+  b <- x %>% 
+    group_by(POS) %>% 
+    summarise(daf = dafFunc(ref,alt))
+  y <- full_join(x, b) 
+  z <- full_join(y,a)
+  return(z)
+}
+```
+
+## Calculate group allele sums
+
+You are interested in whether the allele frequences between two groups of samples is significantly different. In this method you will treat all the alleles in each group as one large population. Essentially you will construct 2 pools of pools.
+
+
+```{r groupsums}
+groupsums <- groupsum(alleles_rh1_filt, group1, group2) %>% 
+  filter(!is.na(group))
+```
+
+## Calculate ΔAlleleFrequency and χ2 statistic
+
+Now that you have your pools of allele counts, you will calculate the difference in allele frequency between the two groups at each SNP site and use χ2 to determine if those differences are statistically significant. After generating the dAFchi dataframe you may inspect it to see the numerical results of the ΔAlleleFrequency and statistical test.
+
+```{r dAF_chi2}
+dAFchi <- groupsums %>%
+  chi_daf_test()
+
+chitest <- dAFchi %>% # Reduce information to useful values
+  drop_na() %>% 
+  select(POS, logpval) %>% 
+  distinct()
+```
+
+## Plot results
+
+Now that you have generated the statistics you can visualize the results. One layout that is informative is to plot the -log(p-value) on the y axis and the genomic coordinate on the x-axis. If the data spans multiple chromosomes you would end up with a familliar manhattan plot. In our case we are looking at a section of a single chromosome.
+
+```{r}
+chitest %>% 
+  ggplot() + 
+  geom_point(aes(x = POS, y = logpval), alpha = .25) + 
+  theme_bw() +
+  theme(axis.title = element_blank(),
+        legend.position="none") +
+  theme(plot.margin = margin(t = 10, unit = "pt"))
+```
+
+You should see a clear selective sweep present in the plot. It may be useful to zoom in on the plot to get better resolution of the peak. You may also search and sort the dataframes to identify the SNP sites with the highest -log(p-value) to find out which region is most likely under selection.
+
+## Functional relevance of SNPs
+
+Once the region under selection is identified, the work of identifying the causal mutations begins. This process can become complicated but some basic tests can sometimes yield interesting results. The VCF file you have been working with includes annotations from SNPEff. SNPEff uses a gene annotation to assign probably effects to SNPs identified in the VCF file. These fit numerous categories and can be useful for attributing functional changes to genetic changes.
+
+Read back in the vcf file, this time isolating the annotation fields.
+
+```{r read ANN}
+info.chr4.df <- chr4_vcf %>% 
+  vcfR2tidy(single_frame = TRUE) %>% 
+  .$dat %>% 
+  dplyr::select(POS, Indiv, ANN) %>% 
+  separate(ANN, into = c(NA, "Variant_Type"), extra = "drop", sep = '\\|')
+```
+
+Now you can merge this SNP annotation with your chitest data and visualize the effects of the SNPs in your sweep region. There are many different categories but I always like to see if there are any protein code changing SNPs in the sweep regions I look at.
+
+```{r merge ANN and plot}
+
+combined <- chitest %>% 
+  left_join(info.chr4.df) %>% 
+  mutate(Variant_Type = if_else(grepl("missense", Variant_Type), "missense", "other"))
+
+combined %>% 
+  ggplot() + 
+  geom_point(aes(x = POS, y = logpval, color = Variant_Type), alpha = .25) + 
+  geom_point(data = combined %>% 
+               filter(Variant_Type == "missense"),
+             aes(x = POS, y = logpval, color = Variant_Type)) +
+  theme_bw() +
+  theme(axis.title = element_blank()) +
+  theme(plot.margin = margin(t = 10, unit = "pt"))
+
+```
+
+These missense mutations in the center of the sweep correspond to amino acid changes in the rhodopsin protein. If these seem interesting then the next step would be to undertake structural and functional studies on how these mutations may be influencing the activity of the gene.
+
