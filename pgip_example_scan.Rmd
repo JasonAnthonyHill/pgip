@@ -89,7 +89,8 @@ alleles_rh1_filt <- alleles_rh1_depth_filt %>% # Filter sites with less that 70%
 
 ## Define Groups
 
-Now your data is ready for testing. We discussed the nature of the data you are working with and which populations we are going to contrast. You will now define the members of the two groups.
+Now your data is ready for testing. We discussed the nature of the data you are working with and which populations we are going to contrast. 
+You will now define the members of the two groups. We will be contrasting populations in the high salinity northern Baltic sea against marine and low salinity Balitic sea populations.
 
 ```{r define contrast groups}
 group1 <- c("PB1_HastKar_Baltic_Spring", 
