@@ -35,7 +35,7 @@ library(data.table)
 For the sake of space and speed you will limit your analysis to a 7MB chunk of chromosome 4, however this method is easilly extensible to whole genome analysis.
 
 ```{r load vcf}
-chr4_vcf <- read.vcfR("chr4_subregion_10pools.vcf")
+chr4_vcf <- read.vcfR("chr4_subregion_10pools.vcf.gz")
 ```
 
 # Convert vcf to a dataframe
