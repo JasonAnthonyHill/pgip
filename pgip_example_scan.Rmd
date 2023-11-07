@@ -5,7 +5,7 @@ date: "`r Sys.Date()`"
 output: html_document
 ---
 
-### Selection scan example using data from Atlantic herring
+# Selection scan example using data from Atlantic herring
 
 Welcome to the selection scan example. In this module we will work with pooled data from the Atlantic herring. Using pooled population resequencing we will select two groups of populations to contrast and identify a recent strong selective sweep. This code is provided for instruction and may serve as a template for your own work in the future.
 
@@ -14,10 +14,10 @@ Welcome to the selection scan example. In this module we will work with pooled d
 Our approach in this example is designed to be as basic and transparent as possible. There are many methods available to scan for haplotype variation between populations but today you will be using a simple and robust method which is good at detecting selective sweeps.
 
 You will require just a few installed libraries to implement the ΔAlleleFrequency-χ2 method:
-* knitr - Allows the implementation of rmarkdown
-* tidyverse - Implements the syntax conventions and plotting tools used in this exercise
-* vcfR - Enables the reading and manipulation of variant call files
-* data.table - Additional data manipulation utilities used herein
+*knitr* - Allows the implementation of rmarkdown
+*tidyverse* - Implements the syntax conventions and plotting tools used in this exercise
+*vcfR* - Enables the reading and manipulation of variant call files
+*data.table* - Additional data manipulation utilities used herein
 
 Please install these libraries if you do not already have them available and run the code chunk below.
 
@@ -28,9 +28,9 @@ library(vcfR)
 library(data.table)
 ```
 
-## Loading of variant calls and initial filtering
+# Loading of variant calls and initial filtering
 
-# Load vcf
+## Load vcf
 
 For the sake of space and speed you will limit your analysis to a 7MB chunk of chromosome 4, however this method is easilly extensible to whole genome analysis.
 
@@ -38,7 +38,7 @@ For the sake of space and speed you will limit your analysis to a 7MB chunk of c
 chr4_vcf <- read.vcfR("chr4_subregion_10pools.vcf.gz")
 ```
 
-# Convert vcf to a dataframe
+## Convert vcf to a dataframe
 
 First you want to convert the vcf file to a dataframe for easier manipulation within R. You will also only keep the information that is useful this analysis. VCF files contain a lot of information, but this method is only concerned with allele counts within populations. For example, genotype calls are not relevant since we are working with pooled samples, and will be doing population pooling later.
 
@@ -52,7 +52,7 @@ chr4.df <- chr4_vcf %>%
   separate(gt_AD, c("ref","alt"), sep = ",", convert = T)
 ```
 
-#Filtering 
+## Filtering 
 
 One of the reasons this method is good to apply, especially at the beginning of a project, is that it is robust to irregularities in the variant calling step. As such minimal filtering is required, which as a general rule is a good thing. However it is still usefull to remove sites from the analysis that have extreme high or low coverage, and sites which have missing data from too many populations. 
 
@@ -87,10 +87,24 @@ alleles_rh1_filt <- alleles_rh1_depth_filt %>% # Filter sites with less that 70%
 ```
 
 
-## Define Groups
+# Define Groups
 
 Now your data is ready for testing. We discussed the nature of the data you are working with and which populations we are going to contrast. 
-You will now define the members of the two groups. We will be contrasting populations in the high salinity northern Baltic sea against marine and low salinity Balitic sea populations.
+You will now define the members of the two groups used in your comparison. Often you will have phenotypic or environmental variables that you will use to define the members of the contrasting groups. In the case of these herring populations, you have painstakingly gathered environmental information regarding the salinity, water clarity, and red light absorbance at each of your sample sites. Use some or all of these criteria to divide your samples into two groups. Your motivation is to identify the genetic variants that may have been under selection in these different environmental regimes.
+
+```{r environmental variables}
+environmental_vars <- read_csv("rh1_poolAF_secchi_sal_abs_20190204.csv") %>% 
+  filter(code %in% c("PB1_HastKar_Baltic_Spring", 
+            "PB4_Hudiksvall_Baltic_Spring",
+            "PB6_Galve_Baltic_Summer",
+            "PB5_Galve_Baltic_Spring",
+            "B_Vaxholm_Baltic_Spring",
+            "HGS15_NSSH_Atlantic_Spring",
+            "HGS8_KattegatNorth_Atlantic_Spring",
+            "O_Hamburgsund_Atlantic_Spring",
+            "PB10_Skagerrak_Atlantic_Spring",
+            "A_Kalix_Baltic_Spring"))
+```
 
 ```{r define contrast groups}
 group1 <- c("PB1_HastKar_Baltic_Spring", 
@@ -106,7 +120,7 @@ group2 <- c("HGS15_NSSH_Atlantic_Spring",
 ```
 
 
-## Define functions used for statistical tests
+# Define functions used for statistical tests
 
 You will define your own functions to pool the group allele counts, calculate the ΔAlleleFrequency, and apply R's inbuilt χ2 function to test for the statistical significance of deviation from expected allele frequences between the populations. If you have questions about the specifics of the functions feel free to ask.
 
@@ -169,7 +183,7 @@ chi_daf_test <- function(x) {
 }
 ```
 
-## Calculate group allele sums
+# Calculate group allele sums
 
 You are interested in whether the allele frequences between two groups of samples is significantly different. In this method you will treat all the alleles in each group as one large population. Essentially you will construct 2 pools of pools.
 
@@ -179,7 +193,7 @@ groupsums <- groupsum(alleles_rh1_filt, group1, group2) %>%
   filter(!is.na(group))
 ```
 
-## Calculate ΔAlleleFrequency and χ2 statistic
+# Calculate ΔAlleleFrequency and χ2 statistic
 
 Now that you have your pools of allele counts, you will calculate the difference in allele frequency between the two groups at each SNP site and use χ2 to determine if those differences are statistically significant. After generating the dAFchi dataframe you may inspect it to see the numerical results of the ΔAlleleFrequency and statistical test.
 
@@ -193,7 +207,7 @@ chitest <- dAFchi %>% # Reduce information to useful values
   distinct()
 ```
 
-## Plot results
+# Plot results
 
 Now that you have generated the statistics you can visualize the results. One layout that is informative is to plot the -log(p-value) on the y axis and the genomic coordinate on the x-axis. If the data spans multiple chromosomes you would end up with a familliar manhattan plot. In our case we are looking at a section of a single chromosome.
 
@@ -209,7 +223,7 @@ chitest %>%
 
 You should see a clear selective sweep present in the plot. It may be useful to zoom in on the plot to get better resolution of the peak. You may also search and sort the dataframes to identify the SNP sites with the highest -log(p-value) to find out which region is most likely under selection.
 
-## Functional relevance of SNPs
+# Functional relevance of SNPs
 
 Once the region under selection is identified, the work of identifying the causal mutations begins. This process can become complicated but some basic tests can sometimes yield interesting results. The VCF file you have been working with includes annotations from SNPEff. SNPEff uses a gene annotation to assign probably effects to SNPs identified in the VCF file. These fit numerous categories and can be useful for attributing functional changes to genetic changes.
 
@@ -238,8 +252,9 @@ combined %>%
                filter(Variant_Type == "missense"),
              aes(x = POS, y = logpval, color = Variant_Type)) +
   theme_bw() +
-  theme(axis.title = element_blank()) +
-  theme(plot.margin = margin(t = 10, unit = "pt"))
+  # theme(axis.title = element_blank()) +
+  theme(plot.margin = margin(t = 10, unit = "pt")) +
+  labs(x = "Chr 4 bp", y = "Chi squared log(p-val)")
 
 ```
 
