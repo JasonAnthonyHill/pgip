@@ -35,7 +35,7 @@ library(data.table)
 For the sake of space and speed you will limit your analysis to a 7MB chunk of chromosome 4, however this method is easilly extensible to whole genome analysis.
 
 ```{r load vcf}
-chr4_vcf <- read.vcfR("chr4_subregion_10pools.vcf.gz")
+chr4_vcf <- read.vcfR("Ch_v2.0.2_envPools_chr4subregion.vcf.gz")
 ```
 
 ## Convert vcf to a dataframe
@@ -92,20 +92,19 @@ alleles_rh1_filt <- alleles_rh1_depth_filt %>% # Filter sites with less that 70%
 Now your data is ready for testing. We discussed the nature of the data you are working with and which populations we are going to contrast. 
 You will now define the members of the two groups used in your comparison. Often you will have phenotypic or environmental variables that you will use to define the members of the contrasting groups. In the case of these herring populations, you have painstakingly gathered environmental information regarding the salinity, water clarity, and red light absorbance at each of your sample sites. Use some or all of these criteria to divide your samples into two groups. Your motivation is to identify the genetic variants that may have been under selection in these different environmental regimes.
 
+## Load the data
 ```{r environmental variables}
-environmental_vars <- read_csv("rh1_poolAF_secchi_sal_abs_20190204.csv") %>% 
-  filter(code %in% c("PB1_HastKar_Baltic_Spring", 
-            "PB4_Hudiksvall_Baltic_Spring",
-            "PB6_Galve_Baltic_Summer",
-            "PB5_Galve_Baltic_Spring",
-            "B_Vaxholm_Baltic_Spring",
-            "HGS15_NSSH_Atlantic_Spring",
-            "HGS8_KattegatNorth_Atlantic_Spring",
-            "O_Hamburgsund_Atlantic_Spring",
-            "PB10_Skagerrak_Atlantic_Spring",
-            "A_Kalix_Baltic_Spring"))
+environmental_vars <- read_csv("rh1_poolAF_secchi_sal_abs_20190204.csv") 
+```
+## Exercise on contrast selection
+
+In the code block below view the data and use plotting functions to understand the distribution of variables.
+```{r environmental variable exploration}
+View(environmental_vars)
+# ggplot(data = environmental_vars) +
 ```
 
+Now define the members of the two contrast groups. Make sure each group is about the same size.
 ```{r define contrast groups}
 group1 <- c("PB1_HastKar_Baltic_Spring", 
             "PB4_Hudiksvall_Baltic_Spring",
@@ -242,7 +241,9 @@ Now you can merge this SNP annotation with your chitest data and visualize the e
 ```{r merge ANN and plot}
 
 combined <- chitest %>% 
-  left_join(info.chr4.df) %>% 
+  left_join(info.chr4.df) %>%
+    select(-Indiv) %>% 
+  distinct() %>% 
   mutate(Variant_Type = if_else(grepl("missense", Variant_Type), "missense", "other"))
 
 combined %>% 
