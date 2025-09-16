@@ -112,22 +112,37 @@ alleles_rh1_filt <- alleles_rh1_depth_filt %>%
 Now your data is ready for testing. We discussed the nature of the data you are working with and which populations we are going to contrast. 
 You will now define the members of the two groups used in your comparison. Often you will have phenotypic or environmental variables that you will use to define the members of the contrasting groups. In the case of these herring populations, you have painstakingly gathered environmental information regarding the salinity, water clarity, and red light absorbance at each of your sample sites. Use some or all of these criteria to divide your samples into two groups. Your motivation is to identify the genetic variants that may have been under selection in these different environmental regimes.
 
+
+
 ## Load the data
 ```{r environmental variables}
 # This code block is complete, run as is.
-environmental_vars <- read_csv("rh1_poolAF_secchi_sal_abs_20190204.csv") 
+environmental_vars <- read_csv("rh1_poolAF_secchi_sal_abs_20190204.csv") %>% 
+  select(vcfpops, lon, lat, secchi, Salinity, Absorbance_412nm) %>% 
+  drop_na()
 ```
 ## Exercise on contrast selection
 
 In the code block below view the data and use plotting functions to understand the distribution of variables.
+
+lon = longitude
+lat = latitude
+secchi = water clarity (higher values = clearer water)
+Salinity = salinity (higher values = more salty)
+Absorbance_412nm = red light absorbance (higher values = more red light absorbed, less red light penetrates the water column)
+
 ```{r environmental variable exploration}
-# This code block is incomplete. Use various plotting functions to visualize the different
-# environmental variables that you believe may be driving genetic variation.
+# This code block is a template for exploring the environmental variables. Alter as necessary to visualize the different variables.
 View(environmental_vars)
-# ggplot(data = environmental_vars) +
+
+ ggplot(data = environmental_vars) +
+   geom_point(aes(x = lon, y = lat, color = Salinity, size = secchi)) +
+   # geom_text(aes(x = lon, y = lat, label = vcfpops), vjust = -1) + # Uncomment to add population names
+   scale_color_viridis_c() +
+   theme_minimal()
 ```
 
-Now define the members of the two contrast groups. Make sure each group is about the same size. Use the vcfpops in the environment_vars data.
+Our purpose of the exploration is to define the members of the two groups that will be contrasted in the genomic scan. Using insight gained from the differences seen in the environmental variables data define the members of the two contrast groups. Make sure each group is about the same size. Use the vcfpops in the environment_vars data.
 ```{r define contrast groups}
 # This code block is incomplete. Fill the character vectors for group1 and group2
 # population names can come from chr4.df$Indiv or environmental_vars$vcfpops
@@ -236,8 +251,6 @@ chitest %>%
   ggplot() + 
   geom_point(aes(x = POS, y = logpval), alpha = .25) + 
   theme_bw() +
-  theme(axis.title = element_blank(),
-        legend.position="none") +
   theme(plot.margin = margin(t = 10, unit = "pt")) +
   labs(x = "Chr 4 bp", y = "Chi squared log(p-val)")
 ```

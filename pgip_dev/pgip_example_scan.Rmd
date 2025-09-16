@@ -100,7 +100,7 @@ environmental_vars <- read_csv("rh1_poolAF_secchi_sal_abs_20190204.csv")
 
 In the code block below view the data and use plotting functions to understand the distribution of variables.
 ```{r environmental variable exploration}
-View(environmental_vars)
+# View(environmental_vars)
 # ggplot(data = environmental_vars) +
 ```
 
